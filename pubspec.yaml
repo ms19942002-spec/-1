@@ -1,0 +1,22 @@
+name: dongtan_cheonan_alarm
+description: 동탄→천안아산 SRT 도착 3분 전 진동 알람
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_local_notifications: ^17.2.0
+  timezone: ^0.9.4
+  shared_preferences: ^2.2.3
+  vibration: ^2.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
