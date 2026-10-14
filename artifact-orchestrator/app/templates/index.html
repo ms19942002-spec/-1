@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block content %}
+{% if pending %}<meta http-equiv="refresh" content="10">{% endif %}
+
+<div class="kpis" style="margin-bottom:16px">
+  <div class="kpi"><b>{{ artifacts|length }}</b><span>등록 산출물</span></div>
+  <div class="kpi"><b>{{ pending }}</b><span>평가 대기/진행 중</span></div>
+  {% for key, label in VERDICTS.items() %}
+  <div class="kpi"><b>{{ counts.get(key, 0) }}</b><span><span class="badge {{ key }}">{{ label }}</span></span></div>
+  {% endfor %}
+</div>
+
+<div class="grid g2">
+  <div class="card">
+    <h2>포트폴리오 맵 (TIME)</h2>
+    {% set W = 420 %}{% set P = 36 %}
+    <svg viewBox="0 0 {{ W }} {{ W }}" width="100%" style="max-width:460px" role="img" aria-label="업무가치-기술상태 4분면">
+      {% set S = W - 2*P %}
+      {% set mid = P + S*0.6 %}{% set midy = P + S*0.4 %}
+      <rect x="{{ P }}" y="{{ P }}" width="{{ S*0.6 }}" height="{{ S*0.4 }}" fill="#f2f4f7"/>
+      <rect x="{{ mid }}" y="{{ P }}" width="{{ S*0.4 }}" height="{{ S*0.4 }}" fill="#ecfdf3"/>
+      <rect x="{{ P }}" y="{{ midy }}" width="{{ S*0.6 }}" height="{{ S*0.6 }}" fill="#fef3f2"/>
+      <rect x="{{ mid }}" y="{{ midy }}" width="{{ S*0.4 }}" height="{{ S*0.6 }}" fill="#fffaeb"/>
+      <text x="{{ P+6 }}" y="{{ P+16 }}" font-size="12" fill="#5b6b82">현상 유지</text>
+      <text x="{{ W-P-6 }}" y="{{ P+16 }}" font-size="12" fill="#12805c" text-anchor="end">투자 확대</text>
+      <text x="{{ P+6 }}" y="{{ W-P-8 }}" font-size="12" fill="#c2392b">정리·폐기</text>
+      <text x="{{ W-P-6 }}" y="{{ W-P-8 }}" font-size="12" fill="#c26a00" text-anchor="end">개선·통합</text>
+      <text x="{{ W/2 }}" y="{{ W-8 }}" font-size="12" fill="#667085" text-anchor="middle">업무 가치 →</text>
+      <text x="12" y="{{ W/2 }}" font-size="12" fill="#667085" text-anchor="middle" transform="rotate(-90 12 {{ W/2 }})">기술 상태 →</text>
+      {% for a in done %}{% set f = a.evaluation.final %}
+      <a href="/artifacts/{{ a.id }}">
+        <circle cx="{{ P + S*f.business/100 }}" cy="{{ P + S*(1-f.technical/100) }}" r="7"
+                class="{{ a.decision or f.verdict }}" style="fill:var(--{{ (a.decision or f.verdict)|lower }}, #98a2b3);opacity:.85;stroke:#fff;stroke-width:1.5">
+          <title>{{ a.name }} — 기술 {{ f.technical }} / 가치 {{ f.business }}</title>
+        </circle>
+        <text x="{{ P + S*f.business/100 + 9 }}" y="{{ P + S*(1-f.technical/100) + 4 }}" font-size="10" fill="#344054">{{ a.id }}</text>
+      </a>
+      {% endfor %}
+    </svg>
+    <p class="small muted">점 옆 숫자는 ID입니다. 업무 가치는 직접 입력한 중요도와 사용자 수를 우선 반영하므로, 각 산출물 상세 화면에서 입력할수록 정확해집니다.</p>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>① 폴더 일괄 스캔 <span class="small muted">— 뒤섞인 공유폴더를 통째로</span></h2>
+      <form class="inline" method="post" action="/scan">
+        <input type="text" name="root" placeholder="/mnt/share/부서산출물" style="flex:1" required>
+        <button>스캔</button>
+      </form>
+      <p class="small muted">하위 폴더를 훑어 프로젝트 폴더(requirements.txt, package.json, FastAPI 코드 등), 정적 사이트(index.html), 흩어진 HTML 파일을 각각 하나의 산출물로 자동 등록합니다. 원본은 읽기만 합니다.</p>
+    </div>
+    <div class="card">
+      <h2>② 개별 등록</h2>
+      <form method="post" action="/artifacts" enctype="multipart/form-data">
+        <div class="form-grid">
+          <label>등록 방식
+            <select name="source_type">
+              <option value="upload">파일 업로드 (zip / html)</option>
+              <option value="path">서버 경로</option>
+              <option value="git">사내 Git 주소</option>
+              <option value="url">사내 웹페이지 URL</option>
+            </select>
+          </label>
+          <label>이름 (선택)<input type="text" name="name"></label>
+          <label>경로 / 주소<input type="text" name="source_ref" placeholder="경로, Git, URL일 때"></label>
+          <label>파일<input type="file" name="file" accept=".zip,.html,.htm"></label>
+        </div>
+        <p style="margin:10px 0 0"><button>등록하고 평가</button></p>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>산출물 목록</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>ID</th><th>이름</th><th>유형</th><th>담당/부서</th><th>성숙도</th><th>기술</th><th>가치</th><th>판정</th><th>통합 그룹</th><th>상태</th></tr></thead>
+    <tbody>
+    {% for a in artifacts %}{% set f = (a.evaluation or {}).get('final') or {} %}
+    <tr>
+      <td>{{ a.id }}</td>
+      <td><a href="/artifacts/{{ a.id }}">{{ a.name }}</a><div class="small muted">{{ a.source_ref|truncate(60, True) }}</div></td>
+      <td>{{ (a.analysis or {}).get('kind', '') }}</td>
+      <td>{{ a.owner }}{% if a.department %}<div class="small muted">{{ a.department }}</div>{% endif %}</td>
+      <td>{{ f.get('maturity_label', '') }}</td>
+      <td>{% if f %}<div class="bar"><i style="width:{{ f.technical }}%"></i></div><span class="small">{{ f.technical }}</span>{% endif %}</td>
+      <td>{% if f %}<div class="bar"><i style="width:{{ f.business }}%;background:#7a5af8"></i></div><span class="small">{{ f.business }}</span>{% endif %}</td>
+      <td>
+        {% if a.decision %}<span class="badge {{ a.decision }}">{{ VERDICTS.get(a.decision, '보류') }}</span><div class="small muted">확정</div>
+        {% elif f %}<span class="badge {{ f.verdict }}">{{ f.verdict_label }}</span><div class="small muted">제안</div>{% endif %}
+      </td>
+      <td>{% if a.id in group_of %}<a href="/groups#g{{ group_of[a.id] }}">그룹 {{ group_of[a.id] }}</a>{% endif %}</td>
+      <td class="small">
+        {% if a.status == 'done' %}완료{% if (a.evaluation or {}).get('llm_status') != 'ok' %}<div class="warn">규칙 기반만</div>{% endif %}
+        {% elif a.status == 'error' %}<span class="warn" title="{{ a.error }}">오류</span>
+        {% elif a.status == 'analyzing' %}분석 중…{% else %}대기{% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="10" class="muted">아직 등록된 산출물이 없습니다. 위에서 폴더를 스캔하거나 파일을 등록하세요.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

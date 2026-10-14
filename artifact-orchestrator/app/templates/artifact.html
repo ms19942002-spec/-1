@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}{{ a.name }} · 산출물 오케스트레이터{% endblock %}
+{% block content %}
+{% if a.status in ('pending', 'analyzing') %}<meta http-equiv="refresh" content="5">{% endif %}
+{% set ev = a.evaluation or {} %}{% set f = ev.get('final') or {} %}{% set l = ev.get('llm') or {} %}{% set an = a.analysis or {} %}
+
+<div class="card">
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <h2 style="margin:0">#{{ a.id }} {{ a.name }}</h2>
+    {% if a.decision %}<span class="badge {{ a.decision }}">확정: {{ VERDICTS.get(a.decision, '보류') }}</span>{% endif %}
+    {% if f %}<span class="badge {{ f.verdict }}">제안: {{ f.verdict_label }}</span>{% endif %}
+    <span class="muted small">{{ a.source_type }} · {{ a.source_ref }}</span>
+    <form method="post" action="/artifacts/{{ a.id }}/evaluate" style="margin-left:auto"><button class="secondary">재평가</button></form>
+  </div>
+  {% if a.status == 'error' %}<p class="warn">평가 오류: {{ a.error }}</p>{% endif %}
+  {% if a.status in ('pending', 'analyzing') %}<p class="muted">평가 진행 중입니다… (자동 새로고침)</p>{% endif %}
+  {% if ev and ev.llm_status != 'ok' %}<p class="warn small">AI 평가를 하지 못해 규칙 기반 점수만 표시합니다: {{ ev.llm_status }}</p>{% endif %}
+</div>
+
+{% if f %}
+<div class="kpis" style="margin-bottom:16px">
+  <div class="kpi"><b>{{ f.overall }}</b><span>종합 점수</span></div>
+  <div class="kpi"><b>{{ f.technical }}</b><span>기술 상태</span></div>
+  <div class="kpi"><b>{{ f.business }}</b><span>업무 가치 ({{ f.business_sources|join(', ') }})</span></div>
+  <div class="kpi"><b>Lv.{{ f.maturity }}</b><span>{{ f.maturity_label }}</span></div>
+</div>
+{% endif %}
+
+<div class="grid g2">
+  <div class="card">
+    <h2>AI 진단</h2>
+    {% if l %}
+      <p>{{ l.summary }}</p>
+      <dl class="kv">
+        <dt>해결하려는 문제</dt><dd>{{ l.purpose }}</dd>
+        <dt>예상 사용자</dt><dd>{{ l.target_users }}</dd>
+        <dt>판정 근거</dt><dd>{% if f.ai_verdict %}<span class="badge {{ f.ai_verdict }}">AI: {{ VERDICTS[f.ai_verdict] }}</span> {% endif %}{{ l.verdict_reason }}</dd>
+        <dt>통합 힌트</dt><dd>{{ l.integration_hint }}</dd>
+      </dl>
+      <h3 style="font-size:14px">강점</h3><ul class="clean">{% for s in l.strengths or [] %}<li>{{ s }}</li>{% endfor %}</ul>
+      <h3 style="font-size:14px">위험 요소</h3><ul class="clean">{% for s in l.risks or [] %}<li>{{ s }}</li>{% endfor %}</ul>
+    {% else %}
+      <p class="muted">AI 평가 결과가 없습니다.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>개발 로드맵 (다음 단계)</h2>
+    {% if l.next_steps %}<ol class="clean">{% for s in l.next_steps %}<li>{{ s }}</li>{% endfor %}</ol>{% else %}<p class="muted">—</p>{% endif %}
+    {% if f %}
+    <h3 style="font-size:14px">세부 점수 <span class="small muted">(규칙 기반 + AI 평균)</span></h3>
+    <table>
+      {% for k, label in [('completeness','완성도'),('code_quality','코드 품질'),('maintainability','유지보수성'),('security','보안')] %}
+      <tr><td style="width:110px">{{ label }}</td><td><div class="bar"><i style="width:{{ f.scores[k] }}%"></i></div></td>
+          <td class="small" style="width:150px">{{ f.scores[k] }} <span class="muted">(규칙 {{ ev.heuristic[k] }}{% if l.scores and l.scores[k] is not none %} / AI {{ l.scores[k] }}{% endif %})</span></td></tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+    {% if group %}
+    <p style="margin-top:14px">🔗 <a href="/groups">통합 후보 그룹</a>에 속해 있습니다:
+      {% for m in group.artifacts if m.id != a.id %}<a href="/artifacts/{{ m.id }}">{{ m.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>관리 정보 · 최종 결정 <span class="small muted">— 업무 가치 점수에 반영됩니다</span></h2>
+  <form method="post" action="/artifacts/{{ a.id }}/meta">
+    <div class="form-grid">
+      <label>이름<input type="text" name="name" value="{{ a.name }}"></label>
+      <label>담당자<input type="text" name="owner" value="{{ a.owner }}"></label>
+      <label>부서<input type="text" name="department" value="{{ a.department }}"></label>
+      <label>업무 중요도 (1~5)<input type="number" min="1" max="5" name="importance" value="{{ a.importance or '' }}"></label>
+      <label>월간 사용자 수<input type="number" min="0" name="monthly_users" value="{{ a.monthly_users if a.monthly_users is not none else '' }}"></label>
+      <label>최종 결정
+        <select name="decision">
+          <option value="">(미정 — AI 제안 따름)</option>
+          {% for k, v in VERDICTS.items() %}<option value="{{ k }}" {% if a.decision == k %}selected{% endif %}>{{ v }}</option>{% endfor %}
+          <option value="Hold" {% if a.decision == 'Hold' %}selected{% endif %}>보류</option>
+        </select>
+      </label>
+    </div>
+    <label class="small muted" style="display:block;margin-top:10px">설명 (AI 평가 시 참고됩니다)
+      <textarea name="description" rows="2">{{ a.description }}</textarea></label>
+    <label class="small muted" style="display:block;margin-top:10px">결정 메모
+      <textarea name="decision_note" rows="2">{{ a.decision_note }}</textarea></label>
+    <p style="margin:10px 0 0;display:flex;gap:8px"><button>저장</button></p>
+  </form>
+  <form method="post" action="/artifacts/{{ a.id }}/delete" onsubmit="return confirm('목록에서 삭제할까요? 원본 파일은 남습니다.')" style="margin-top:8px">
+    <button class="danger">목록에서 삭제</button>
+  </form>
+</div>
+
+{% if an %}
+<div class="card">
+  <h2>정적 분석 결과</h2>
+  <dl class="kv">
+    <dt>유형 / 프레임워크</dt><dd>{{ an.kind }} {% for x in an.frameworks %}<span class="tag">{{ x }}</span>{% endfor %}</dd>
+    <dt>규모</dt><dd>파일 {{ an.file_count }}개 · 코드 {{ an.total_loc }}줄 · {{ an.total_kb }} KB
+      {% for k, v in an.loc.items() %}<span class="tag">{{ k }} {{ v }}</span>{% endfor %}</dd>
+    <dt>최근 수정</dt><dd>{{ an.last_modified or '—' }}</dd>
+    <dt>갖춤 여부</dt><dd>
+      {% for key, label in [('has_readme','README'),('has_requirements','의존성 명세'),('has_dockerfile','Docker'),('has_tests','테스트'),('has_env_example','.env 예시'),('has_auth','인증'),('uses_logging','로깅')] %}
+        <span class="tag" style="{% if not an[key] %}background:#fef3f2;color:#b42318{% endif %}">{{ '✓' if an[key] else '✗' }} {{ label }}</span>
+      {% endfor %}</dd>
+    <dt>DB / 데이터</dt><dd>{% for x in an.db_drivers %}<span class="tag">{{ x }}</span>{% endfor %}
+      {% for t in an.tables %}<span class="tag" style="background:#f4f3ff;color:#5925dc">{{ t }}</span>{% endfor %}{% if not an.db_drivers and not an.tables %}—{% endif %}</dd>
+    <dt>API ({{ an.endpoints|length }})</dt><dd>{% for e in an.endpoints[:40] %}<span class="tag">{{ e.method }} {{ e.path }}</span>{% else %}—{% endfor %}</dd>
+    <dt>화면 ({{ an.pages|length }})</dt><dd>{% for p in an.pages[:30] %}<div class="small">{{ p.file }} — {{ p.title or '(제목 없음)' }} <span class="muted">form {{ p.forms }} · table {{ p.tables }} · {{ p.kb }}KB</span></div>{% else %}—{% endfor %}</dd>
+    {% if an.external_script_hosts %}<dt>외부 스크립트</dt><dd>{% for h in an.external_script_hosts %}<span class="tag">{{ h }}</span>{% endfor %}</dd>{% endif %}
+    <dt>보안 경고</dt><dd>{% for s in an.secrets %}<div class="warn small">⚠ {{ s.type }} — {{ s.file }}:{{ s.line }}</div>{% else %}<span class="muted">발견 없음</span>{% endfor %}</dd>
+    {% if an.big_files %}<dt>거대 파일</dt><dd>{% for b in an.big_files %}<span class="tag">{{ b.file }} ({{ b.lines }}줄)</span>{% endfor %}</dd>{% endif %}
+    <dt>TODO/FIXME</dt><dd>{{ an.todo_count }}</dd>
+    <dt>키워드</dt><dd>{% for k in an.keywords[:25] %}<span class="tag" style="background:#f2f4f7;color:#344054">{{ k }}</span>{% endfor %}</dd>
+  </dl>
+</div>
+{% endif %}
+{% endblock %}

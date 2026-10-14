@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}산출물 오케스트레이터{% endblock %}</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #667085; --line: #e4e7ec;
+    --accent: #2f5bea; --invest: #12805c; --tolerate: #5b6b82; --migrate: #c26a00; --eliminate: #c2392b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.55 -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+  header { background: #111827; color: #fff; padding: 12px 24px; display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+  header a { color: #cbd5e1; text-decoration: none; } header a:hover { color: #fff; }
+  header .brand { font-weight: 700; color: #fff; font-size: 16px; }
+  header .llm { margin-left: auto; font-size: 12px; }
+  main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 16px; }
+  .grid { display: grid; gap: 16px; }
+  .g2 { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .kpi b { display: block; font-size: 24px; } .kpi > span { color: var(--muted); font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; white-space: nowrap; }
+  .table-wrap { overflow-x: auto; }
+  a { color: var(--accent); }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; white-space: nowrap; }
+  .Invest { background: var(--invest); } .Tolerate { background: var(--tolerate); }
+  .Migrate { background: var(--migrate); } .Eliminate { background: var(--eliminate); } .Hold { background: #98a2b3; }
+  .tag { display: inline-block; background: #eef2ff; color: #3538cd; border-radius: 6px; padding: 0 6px; margin: 2px 2px 0 0; font-size: 12px; }
+  .muted { color: var(--muted); } .small { font-size: 12px; }
+  .warn { color: var(--eliminate); }
+  .msg { background: #ecfdf3; border: 1px solid #abefc6; color: #067647; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; }
+  form.inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=text], input[type=number], select, textarea { border: 1px solid #d0d5dd; border-radius: 6px; padding: 7px 9px; font: inherit; min-width: 0; }
+  textarea { width: 100%; }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 8px 14px; font: inherit; cursor: pointer; }
+  button.secondary { background: #fff; color: var(--text); border: 1px solid #d0d5dd; }
+  button.danger { background: #fff; color: var(--eliminate); border: 1px solid #fda29b; }
+  .bar { height: 8px; background: #eaecf0; border-radius: 4px; overflow: hidden; min-width: 80px; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  ul.clean { margin: 4px 0; padding-left: 18px; }
+  dl.kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; margin: 0; }
+  dl.kv dt { color: var(--muted); }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">산출물 오케스트레이터</a>
+  <a href="/">포트폴리오</a>
+  <a href="/groups">통합 후보</a>
+  <a href="/export.csv">CSV 내보내기</a>
+  {% if llm_status is defined %}
+  <span class="llm">사내 LLM: {% if llm_status[0] %}🟢{% else %}🔴{% endif %} {{ llm_status[1] }}</span>
+  {% endif %}
+</header>
+<main>
+  {% if msg %}<div class="msg">{{ msg }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>
